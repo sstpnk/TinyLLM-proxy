@@ -397,7 +397,7 @@ def _replace_model_in_sse(event: str, model: str) -> bytes | None:
         json_part = stripped[5:]
         if json_part.startswith(" "):
             json_part = json_part[1:]
-        payload = json.loads(json_part)
+        payload = json.loads(json_part, strict=False)
         if "model" in payload:
             payload["model"] = model
             result = ("data: " + json.dumps(payload, ensure_ascii=False) + "\n\n").encode(
