@@ -285,38 +285,9 @@ async def _forward_stream(
         if not chunk:  # EOF
             break
 
-        chunk_str = chunk.decode("utf-8")
-
-        # Skip our own trailing [DONE] or non-standard events from upstream
-        line = chunk_str.strip()
-        if line == "data: [DONE]" or "[DONE]" in line:
-            continue
-
-        # Override model field in SSE chunks to match the client's model name
+        # Split chunk into SSE events (separated by \n\n) and process each
         if client_model:
-            try:
-                modified = _replace_model_in_sse(chunk_str, client_model)
-                if modified is not None:
-                    chunk = modified
-                elif chunk_str.lstrip("\r\n ").startswith("data:") and "[DONE]" not in chunk_str:
-                    stripped = chunk_str.lstrip("\r\n ")
-                    json_part = stripped[5:]
-                    if json_part.startswith(" "):
-                        json_part = json_part[1:]
-                    has_model = False
-                    try:
-                        p = json.loads(json_part)
-                        has_model = "model" in p
-                    except Exception:
-                        pass
-                    logger.info(
-                        "SSE_MODEL_DEBUG: not_mod | has_model=%s startswith_s=%s data=%.120s",
-                        has_model,
-                        stripped.startswith("data: "),
-                        stripped[:120],
-                    )
-            except (UnicodeDecodeError, ValueError) as exc:
-                logger.info("SSE_MODEL_DEBUG: exception %s", exc)
+            chunk = _process_sse_buffer(chunk, client_model)
 
         await downstream.write(chunk)
         await downstream.drain()
@@ -366,14 +337,43 @@ async def handle_health(request: web.Request) -> web.Response:
 # ---------------------------------------------------------------------------
 
 
-def _replace_model_in_sse(chunk: str, model: str) -> bytes | None:
-    """Replace ``model`` field in an SSE data line with *model*.
+def _process_sse_buffer(buffer: bytes, client_model: str) -> bytes:
+    """Process a raw SSE byte buffer, overriding model in every ``data:`` line.
+
+    ``readany()`` may return multiple SSE events concatenated in one buffer.
+    We split by ``\\n\\n`` to isolate individual events, process each, and
+    reassemble.  Events containing ``[DONE]`` are dropped.
+    """
+    parts: list[bytes] = []
+    for raw_event in buffer.split(b"\n\n"):
+        if not raw_event or b"[DONE]" in raw_event:
+            continue
+        event = raw_event.decode("utf-8")
+        # Process only the last (data:) line of a multi-line event
+        lines = event.split("\n")
+        data_line = None
+        for ln in lines:
+            if ln.startswith("data:") or ln.lstrip().startswith("data:"):
+                data_line = ln
+        if data_line is not None:
+            modified = _replace_model_in_sse(data_line, client_model)
+            if modified is not None:
+                parts.append(modified)
+                continue
+        parts.append(raw_event + b"\n\n")
+    return b"".join(parts)
+
+
+def _replace_model_in_sse(event: str, model: str) -> bytes | None:
+    """Replace ``model`` field in a single SSE ``data:`` line with *model*.
 
     Strips leading whitespace/newlines before ``data:`` so that
     fragmented TCP reads still get their model overridden.
-    Returns the modified *chunk* as bytes, or ``None`` if no change.
+
+    Returns the modified event bytes (with ``\\n\\n`` terminator), or ``None``
+    if no change was needed.
     """
-    stripped = chunk.lstrip("\r\n ")
+    stripped = event.strip("\r\n ")
     if not stripped.startswith("data:") or "[DONE]" in stripped:
         return None
     try:
