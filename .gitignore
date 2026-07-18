@@ -22,5 +22,8 @@ Thumbs.db
 # Docker
 .docker/
 
+# OpenCode
+.omo/
+
 # Codegraph (auto-generated index)
 .codegraph/
