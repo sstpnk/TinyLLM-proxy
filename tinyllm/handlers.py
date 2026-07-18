@@ -288,6 +288,14 @@ async def _forward_stream(
         # Split chunk into SSE events (separated by \n\n) and process each
         if client_model:
             chunk = _process_sse_buffer(chunk, client_model)
+            # Log multi-event buffers for diagnostics
+            if chunk.count(b"\n\n") > 1:
+                first = chunk.split(b"\n\n")[0]
+                logger.info(
+                    "SSE_BUF: multi-event buf events=%d first=%.80s",
+                    chunk.count(b"\n\n"),
+                    first.decode("utf-8", errors="replace")[:80],
+                )
 
         await downstream.write(chunk)
         await downstream.drain()
@@ -344,8 +352,16 @@ def _process_sse_buffer(buffer: bytes, client_model: str) -> bytes:
     We split by ``\\n\\n`` to isolate individual events, process each, and
     reassemble.  Events containing ``[DONE]`` are dropped.
     """
+    events = buffer.split(b"\n\n")
+    if len(events) > 2:
+        logger.info(
+            "BUF_DEBUG: %d events, total_len=%d, first=%.60s",
+            len(events),
+            len(buffer),
+            events[0].decode("utf-8", errors="replace")[:60] if events[0] else "?",
+        )
     parts: list[bytes] = []
-    for raw_event in buffer.split(b"\n\n"):
+    for raw_event in events:
         if not raw_event or b"[DONE]" in raw_event:
             continue
         event = raw_event.decode("utf-8")
@@ -384,11 +400,14 @@ def _replace_model_in_sse(event: str, model: str) -> bytes | None:
         payload = json.loads(json_part)
         if "model" in payload:
             payload["model"] = model
-            return ("data: " + json.dumps(payload, ensure_ascii=False) + "\n\n").encode(
+            result = ("data: " + json.dumps(payload, ensure_ascii=False) + "\n\n").encode(
                 "utf-8"
             )
-    except (json.JSONDecodeError, KeyError, IndexError):
-        pass
+            return result
+        # Log when model field is missing
+        logger.info("RM_DEBUG: no model in data | has_keys=%s", list(payload.keys()))
+    except (json.JSONDecodeError, KeyError, IndexError) as exc:
+        logger.info("RM_DEBUG: json err %s | event=%.120s", exc, event[:120])
     return None
 
 
