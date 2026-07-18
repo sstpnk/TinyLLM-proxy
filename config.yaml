@@ -1,0 +1,76 @@
+# =============================================================================
+# TinyLLM Configuration
+# =============================================================================
+#
+# Server listen address (inside Docker network — external TLS via Caddy).
+server:
+  host: 172.29.0.1
+  port: 4000
+
+# ---------------------------------------------------------------------------
+# Authentication — single shared API key (comma-separated for multiple keys).
+# The value is read from the environment variable listed in `api_keys_env`.
+# ---------------------------------------------------------------------------
+auth:
+  api_keys_env: TINYLLM_API_KEYS
+
+# ---------------------------------------------------------------------------
+# Routing behaviour
+# ---------------------------------------------------------------------------
+routing:
+  # Seconds to exclude a provider+model after a fallback-eligible error.
+  cooldown_seconds: 300
+  # Maximum providers to try before giving up.
+  max_attempts: 3
+
+# ---------------------------------------------------------------------------
+# Timeouts (seconds)
+# ---------------------------------------------------------------------------
+timeouts:
+  connect_seconds: 10
+  response_seconds: 180
+  stream_idle_seconds: 300
+
+# ---------------------------------------------------------------------------
+# Provider definitions
+#
+# Each provider must have a unique name, type, base_url, and api_key_env
+# pointing to the environment variable that holds its API key.
+# Optional `headers` are merged into every request to that provider.
+# ---------------------------------------------------------------------------
+providers:
+  opencode-zen:
+    type: openai-compatible
+    base_url: https://opencode.ai/zen/v1
+    api_key_env: OPENCODE_ZEN_API_KEY
+
+  openrouter:
+    type: openai-compatible
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    headers:
+      HTTP-Referer: https://llm.stpnk.tech
+      X-Title: TinyLLM
+
+  zai:
+    type: openai-compatible
+    base_url: https://api.z.ai/api/paas/v4
+    api_key_env: ZAI_API_KEY
+
+# ---------------------------------------------------------------------------
+# Route definitions
+#
+# Each named route is an ordered list of (provider, model) pairs.
+# The proxy tries the first entry; on a fallback-eligible error it moves
+# to the next, and so on.
+# ---------------------------------------------------------------------------
+routes:
+  coding-auto:
+    - provider: opencode-zen
+      model: deepseek-v4-flash-free
+
+    - provider: openrouter
+      model: nvidia/nemotron-3-ultra-550b-a55b:free
+
+    - provider: zai
+      model: glm-4.7-flash
