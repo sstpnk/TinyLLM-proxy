@@ -1,0 +1,38 @@
+# =============================================================================
+# systemd service — TinyLLM (Docker)
+# =============================================================================
+# Install:
+#   sudo cp tinyllm.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now tinyllm
+# =============================================================================
+
+[Unit]
+Description=TinyLLM — Lightweight OpenAI-compatible proxy
+Documentation=https://github.com/sstpnk/TinyLLM-proxy
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=root
+
+# -- paths — adjust to match your setup
+Environment=COMPOSE_FILE=/opt/tinyllm/docker-compose.yml
+Environment=COMPOSE_PROJECT_NAME=tinyllm
+
+ExecStart=/usr/bin/docker compose -f ${COMPOSE_FILE} up -d --remove-orphans
+ExecStop=/usr/bin/docker compose -f ${COMPOSE_FILE} down
+
+ExecReload=/usr/bin/docker compose -f ${COMPOSE_FILE} restart
+
+# Grace period for containers to start / stop
+TimeoutStartSec=30
+TimeoutStopSec=15
+
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

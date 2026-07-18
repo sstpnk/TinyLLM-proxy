@@ -1,0 +1,28 @@
+# =============================================================================
+# docker-compose.yml — TinyLLM
+# =============================================================================
+# Usage:
+#   docker compose up -d
+#
+# Override the env file or pass variables via shell:
+#   docker compose --env-file .env.prod up -d
+# =============================================================================
+
+services:
+  tinyllm:
+    build: .
+    container_name: tinyllm
+    restart: unless-stopped
+    ports:
+      - "172.29.0.1:4100:4000"
+    env_file:
+      - .env
+    volumes:
+      # Mount config so it can be updated without rebuilding the image.
+      - ./config.yaml:/app/config.yaml:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4000/health/liveliness')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
