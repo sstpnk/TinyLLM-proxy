@@ -352,15 +352,19 @@ async def handle_health(request: web.Request) -> web.Response:
 def _replace_model_in_sse(chunk: str, model: str) -> bytes | None:
     """Replace ``model`` field in an SSE data line with *model*.
 
-    Strips leading whitespace/newlines before ``data: `` so that
+    Strips leading whitespace/newlines before ``data:`` so that
     fragmented TCP reads still get their model overridden.
     Returns the modified *chunk* as bytes, or ``None`` if no change.
     """
     stripped = chunk.lstrip("\r\n ")
-    if not stripped.startswith("data: ") or "[DONE]" in stripped:
+    if not stripped.startswith("data:") or "[DONE]" in stripped:
         return None
     try:
-        payload = json.loads(stripped[6:])
+        # Handle "data: {...}" or "data:{...}"
+        json_part = stripped[5:]
+        if json_part.startswith(" "):
+            json_part = json_part[1:]
+        payload = json.loads(json_part)
         if "model" in payload:
             payload["model"] = model
             return ("data: " + json.dumps(payload, ensure_ascii=False) + "\n\n").encode(
