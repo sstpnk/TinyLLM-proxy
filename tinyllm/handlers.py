@@ -271,7 +271,14 @@ async def _forward_stream(
     *,
     client_model: str = "",
 ) -> None:
-    """Forward SSE chunks from upstream to the client with idle timeout."""
+    """Forward SSE chunks from upstream to the client with idle timeout.
+
+    Maintains an internal buffer so TCP fragments (``readany()`` bytes
+    starting mid-JSON) never bypass the model-name override.  Only
+    complete ``\\n\\n``-terminated events are forwarded; partial data
+    stays in the buffer across iterations.
+    """
+    buf = b""
     while True:
         try:
             chunk = await asyncio.wait_for(
@@ -283,22 +290,20 @@ async def _forward_stream(
             break
 
         if not chunk:  # EOF
+            # Any leftover bytes in buf are dropped (incomplete event)
             break
 
-        # Split chunk into SSE events (separated by \n\n) and process each
-        if client_model:
-            chunk = _process_sse_buffer(chunk, client_model)
-            # Log multi-event buffers for diagnostics
-            if chunk.count(b"\n\n") > 1:
-                first = chunk.split(b"\n\n")[0]
-                logger.info(
-                    "SSE_BUF: multi-event buf events=%d first=%.80s",
-                    chunk.count(b"\n\n"),
-                    first.decode("utf-8", errors="replace")[:80],
-                )
+        buf += chunk
 
-        await downstream.write(chunk)
-        await downstream.drain()
+        # Extract and forward complete SSE events
+        while b"\n\n" in buf:
+            raw, buf = buf.split(b"\n\n", 1)
+            if not raw or b"[DONE]" in raw:
+                continue
+            if client_model:
+                raw = _replace_model_in_event(raw, client_model)
+            await downstream.write(raw + b"\n\n")
+            await downstream.drain()
 
     # Signal stream end
     try:
@@ -345,70 +350,43 @@ async def handle_health(request: web.Request) -> web.Response:
 # ---------------------------------------------------------------------------
 
 
-def _process_sse_buffer(buffer: bytes, client_model: str) -> bytes:
-    """Process a raw SSE byte buffer, overriding model in every ``data:`` line.
+def _replace_model_in_event(raw_event: bytes, model: str) -> bytes:
+    """Replace ``model`` JSON field in a single complete SSE *raw_event*.
 
-    ``readany()`` may return multiple SSE events concatenated in one buffer.
-    We split by ``\\n\\n`` to isolate individual events, process each, and
-    reassemble.  Events containing ``[DONE]`` are dropped.
+    *raw_event* is one SSE event **without** the trailing ``\\n\\n``
+    (e.g. ``b'data: {...}'``).  If the data-line contains a ``model``
+    field it is replaced with *model*.  Returns the (possibly modified)
+    raw event bytes (still without the ``\\n\\n`` terminator).
     """
-    events = buffer.split(b"\n\n")
-    if len(events) > 2:
-        logger.info(
-            "BUF_DEBUG: %d events, total_len=%d, first=%.60s",
-            len(events),
-            len(buffer),
-            events[0].decode("utf-8", errors="replace")[:60] if events[0] else "?",
-        )
-    parts: list[bytes] = []
-    for raw_event in events:
-        if not raw_event or b"[DONE]" in raw_event:
-            continue
-        event = raw_event.decode("utf-8")
-        # Process only the last (data:) line of a multi-line event
-        lines = event.split("\n")
-        data_line = None
-        for ln in lines:
-            if ln.startswith("data:") or ln.lstrip().startswith("data:"):
-                data_line = ln
-        if data_line is not None:
-            modified = _replace_model_in_sse(data_line, client_model)
-            if modified is not None:
-                parts.append(modified)
-                continue
-        parts.append(raw_event + b"\n\n")
-    return b"".join(parts)
+    text = raw_event.decode("utf-8", errors="replace")
+    lines = text.split("\n")
+    # Find the data: line
+    data_line = None
+    for ln in lines:
+        if ln.startswith("data:") or ln.lstrip().startswith("data:"):
+            data_line = ln
+    if data_line is None:
+        return raw_event  # no data: line → pass through
 
+    stripped = data_line.strip("\r\n ")
+    if "[DONE]" in stripped:
+        return raw_event
 
-def _replace_model_in_sse(event: str, model: str) -> bytes | None:
-    """Replace ``model`` field in a single SSE ``data:`` line with *model*.
-
-    Strips leading whitespace/newlines before ``data:`` so that
-    fragmented TCP reads still get their model overridden.
-
-    Returns the modified event bytes (with ``\\n\\n`` terminator), or ``None``
-    if no change was needed.
-    """
-    stripped = event.strip("\r\n ")
-    if not stripped.startswith("data:") or "[DONE]" in stripped:
-        return None
     try:
-        # Handle "data: {...}" or "data:{...}"
-        json_part = stripped[5:]
+        json_part = stripped[5:]  # strip "data:"
         if json_part.startswith(" "):
             json_part = json_part[1:]
         payload = json.loads(json_part, strict=False)
-        if "model" in payload:
+        if "model" in payload and payload["model"] != model:
             payload["model"] = model
-            result = ("data: " + json.dumps(payload, ensure_ascii=False) + "\n\n").encode(
-                "utf-8"
-            )
-            return result
-        # Log when model field is missing
-        logger.info("RM_DEBUG: no model in data | has_keys=%s", list(payload.keys()))
+            new_data = "data: " + json.dumps(payload, ensure_ascii=False)
+            # Replace the original data line in the event
+            text = text.replace(data_line, new_data, 1)
+            return text.encode("utf-8")
     except (json.JSONDecodeError, KeyError, IndexError) as exc:
-        logger.info("RM_DEBUG: json err %s | event=%.120s", exc, event[:120])
-    return None
+        logger.debug("MODEL_REPLACE: json err %s | event=%.120s", exc, data_line[:120])
+
+    return raw_event
 
 
 def _attempt_index(route, step) -> int:
