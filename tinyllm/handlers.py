@@ -299,9 +299,21 @@ async def _forward_stream(
                 if modified is not None:
                     chunk = modified
                 elif chunk_str.lstrip("\r\n ").startswith("data:") and "[DONE]" not in chunk_str:
+                    stripped = chunk_str.lstrip("\r\n ")
+                    json_part = stripped[5:]
+                    if json_part.startswith(" "):
+                        json_part = json_part[1:]
+                    has_model = False
+                    try:
+                        p = json.loads(json_part)
+                        has_model = "model" in p
+                    except Exception:
+                        pass
                     logger.info(
-                        "SSE_MODEL_DEBUG: not modified | data=%.100s",
-                        chunk_str.lstrip("\r\n ")[:100],
+                        "SSE_MODEL_DEBUG: not_mod | has_model=%s startswith_s=%s data=%.120s",
+                        has_model,
+                        stripped.startswith("data: "),
+                        stripped[:120],
                     )
             except (UnicodeDecodeError, ValueError) as exc:
                 logger.info("SSE_MODEL_DEBUG: exception %s", exc)
