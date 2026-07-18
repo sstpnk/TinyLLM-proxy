@@ -285,10 +285,16 @@ async def _forward_stream(
         if not chunk:  # EOF
             break
 
+        chunk_str = chunk.decode("utf-8")
+
+        # Skip our own trailing [DONE] or non-standard events from upstream
+        line = chunk_str.strip()
+        if line == "data: [DONE]" or "[DONE]" in line:
+            continue
+
         # Override model field in SSE chunks to match the client's model name
         if client_model:
             try:
-                chunk_str = chunk.decode("utf-8")
                 modified = _replace_model_in_sse(chunk_str, client_model)
                 if modified is not None:
                     chunk = modified
@@ -299,8 +305,11 @@ async def _forward_stream(
         await downstream.drain()
 
     # Signal stream end
-    await downstream.write(b"\ndata: [DONE]\n\n")
-    await downstream.drain()
+    try:
+        await downstream.write(b"data: [DONE]\n\n")
+        await downstream.drain()
+    except (ConnectionResetError, ConnectionAbortedError):
+        logger.debug("request=%s client disconnected before final [DONE]", rid)
 
 
 # ---------------------------------------------------------------------------
@@ -343,12 +352,15 @@ async def handle_health(request: web.Request) -> web.Response:
 def _replace_model_in_sse(chunk: str, model: str) -> bytes | None:
     """Replace ``model`` field in an SSE data line with *model*.
 
+    Strips leading whitespace/newlines before ``data: `` so that
+    fragmented TCP reads still get their model overridden.
     Returns the modified *chunk* as bytes, or ``None`` if no change.
     """
-    if not chunk.startswith("data: ") or chunk.strip() == "data: [DONE]":
+    stripped = chunk.lstrip("\r\n ")
+    if not stripped.startswith("data: ") or "[DONE]" in stripped:
         return None
     try:
-        payload = json.loads(chunk[6:])
+        payload = json.loads(stripped[6:])
         if "model" in payload:
             payload["model"] = model
             return ("data: " + json.dumps(payload, ensure_ascii=False) + "\n\n").encode(
