@@ -298,8 +298,13 @@ async def _forward_stream(
                 modified = _replace_model_in_sse(chunk_str, client_model)
                 if modified is not None:
                     chunk = modified
-            except (UnicodeDecodeError, ValueError):
-                pass
+                elif chunk_str.lstrip("\r\n ").startswith("data:") and "[DONE]" not in chunk_str:
+                    logger.info(
+                        "SSE_MODEL_DEBUG: not modified | data=%.100s",
+                        chunk_str.lstrip("\r\n ")[:100],
+                    )
+            except (UnicodeDecodeError, ValueError) as exc:
+                logger.info("SSE_MODEL_DEBUG: exception %s", exc)
 
         await downstream.write(chunk)
         await downstream.drain()
