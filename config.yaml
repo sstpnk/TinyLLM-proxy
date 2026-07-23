@@ -2,9 +2,9 @@
 # TinyLLM Configuration
 # =============================================================================
 #
-# Server listen address (inside Docker network — external TLS via Caddy).
+# Server listen address (use 0.0.0.0 inside containers; bind on host via docker-compose ports).
 server:
-  host: 172.29.0.1
+  host: 0.0.0.0
   port: 4000
 
 # ---------------------------------------------------------------------------
@@ -65,12 +65,30 @@ providers:
 # to the next, and so on.
 # ---------------------------------------------------------------------------
 routes:
-  coding-auto:
+  coding-zen:
     - provider: opencode-zen
       model: deepseek-v4-flash-free
 
+  coding-openrouter:
     - provider: openrouter
       model: nvidia/nemotron-3-ultra-550b-a55b:free
 
+  coding-zai:
+    - provider: zai
+      model: glm-4.7-flash
+
+  coding-auto:
+    - provider: opencode-zen
+      model: deepseek-v4-flash-free
+    - provider: openrouter
+      model: nvidia/nemotron-3-ultra-550b-a55b:free
+    - provider: zai
+      model: glm-4.7-flash
+
+  agent-auto:
+    - provider: opencode-zen
+      model: deepseek-v4-flash-free
+    - provider: openrouter
+      model: nvidia/nemotron-3-ultra-550b-a55b:free
     - provider: zai
       model: glm-4.7-flash
