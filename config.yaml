@@ -19,7 +19,7 @@ auth:
 # ---------------------------------------------------------------------------
 routing:
   # Seconds to exclude a provider+model after a fallback-eligible error.
-  cooldown_seconds: 300
+  cooldown_seconds: 60
   # Maximum providers to try before giving up.
   max_attempts: 4
 
@@ -28,8 +28,8 @@ routing:
 # ---------------------------------------------------------------------------
 timeouts:
   connect_seconds: 10
-  response_seconds: 180
-  stream_idle_seconds: 300
+  response_seconds: 120
+  stream_idle_seconds: 180
 
 # ---------------------------------------------------------------------------
 # Provider definitions
