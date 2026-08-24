@@ -65,7 +65,7 @@ providers:
 # to the next, and so on.
 # ---------------------------------------------------------------------------
 routes:
-  ox-alpha:
+  coding-auto:
     - provider: opencode-zen
       model: x-preview-f-free
     - provider: openrouter
@@ -75,30 +75,12 @@ routes:
     - provider: openrouter
       model: z-ai/glm-5.2:free
 
-  coding-zen:
-    - provider: opencode-zen
-      model: hy3-free
-
-  coding-openrouter:
-    - provider: openrouter
-      model: nvidia/nemotron-3-ultra-550b-a55b:free
-
-  coding-zai:
-    - provider: zai
-      model: glm-4.7-flash
-
-  coding-auto:
-    - provider: opencode-zen
-      model: hy3-free
-    - provider: openrouter
-      model: nvidia/nemotron-3-ultra-550b-a55b:free
-    - provider: zai
-      model: glm-4.7-flash
-
   agent-auto:
     - provider: opencode-zen
-      model: hy3-free
+      model: x-preview-f-free
     - provider: openrouter
-      model: nvidia/nemotron-3-ultra-550b-a55b:free
-    - provider: zai
-      model: glm-4.7-flash
+      model: stealth/ox-alpha
+    - provider: opencode-zen
+      model: nemotron-3.5-lightning-free
+    - provider: openrouter
+      model: z-ai/glm-5.2:free
