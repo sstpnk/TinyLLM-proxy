@@ -21,7 +21,7 @@ routing:
   # Seconds to exclude a provider+model after a fallback-eligible error.
   cooldown_seconds: 300
   # Maximum providers to try before giving up.
-  max_attempts: 3
+  max_attempts: 4
 
 # ---------------------------------------------------------------------------
 # Timeouts (seconds)
@@ -65,9 +65,19 @@ providers:
 # to the next, and so on.
 # ---------------------------------------------------------------------------
 routes:
+  ox-alpha:
+    - provider: opencode-zen
+      model: x-preview-f-free
+    - provider: openrouter
+      model: stealth/ox-alpha
+    - provider: opencode-zen
+      model: nemotron-3.5-lightning-free
+    - provider: openrouter
+      model: z-ai/glm-5.2:free
+
   coding-zen:
     - provider: opencode-zen
-      model: deepseek-v4-flash-free
+      model: hy3-free
 
   coding-openrouter:
     - provider: openrouter
@@ -79,7 +89,7 @@ routes:
 
   coding-auto:
     - provider: opencode-zen
-      model: deepseek-v4-flash-free
+      model: hy3-free
     - provider: openrouter
       model: nvidia/nemotron-3-ultra-550b-a55b:free
     - provider: zai
@@ -87,7 +97,7 @@ routes:
 
   agent-auto:
     - provider: opencode-zen
-      model: deepseek-v4-flash-free
+      model: hy3-free
     - provider: openrouter
       model: nvidia/nemotron-3-ultra-550b-a55b:free
     - provider: zai
