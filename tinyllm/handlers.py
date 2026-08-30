@@ -101,7 +101,7 @@ async def _handle_non_streaming(
     """Non-streaming: try providers in order, return first success."""
     client_model = body.get("model", "")
 
-    for step in route.steps:
+    for step in _route_steps_to_try(route, state.config):
         if state.is_cooldown_active(step.provider, step.model):
             continue
 
@@ -181,7 +181,7 @@ async def _handle_streaming(
     provider: ProviderClient,
 ) -> web.Response:
     """Streaming: try providers in order, forward SSE chunks on first success."""
-    for step in route.steps:
+    for step in _route_steps_to_try(route, state.config):
         if state.is_cooldown_active(step.provider, step.model):
             continue
 
@@ -387,6 +387,11 @@ def _replace_model_in_event(raw_event: bytes, model: str) -> bytes:
         logger.debug("MODEL_REPLACE: json err %s | event=%.120s", exc, data_line[:120])
 
     return raw_event
+
+
+def _route_steps_to_try(route, config) -> list:
+    """Return the configured route steps limited by routing.max_attempts."""
+    return route.steps[: config.max_attempts]
 
 
 def _attempt_index(route, step) -> int:

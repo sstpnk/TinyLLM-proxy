@@ -19,15 +19,15 @@ auth:
 # ---------------------------------------------------------------------------
 routing:
   # Seconds to exclude a provider+model after a fallback-eligible error.
-  cooldown_seconds: 60
+  cooldown_seconds: 300
   # Maximum providers to try before giving up.
-  max_attempts: 4
+  max_attempts: 5
 
 # ---------------------------------------------------------------------------
 # Timeouts (seconds)
 # ---------------------------------------------------------------------------
 timeouts:
-  connect_seconds: 10
+  connect_seconds: 30
   response_seconds: 120
   stream_idle_seconds: 180
 
@@ -52,7 +52,7 @@ providers:
       HTTP-Referer: https://llm.stpnk.tech
       X-Title: TinyLLM
 
-  zai:
+  z-ai:
     type: openai-compatible
     base_url: https://api.z.ai/api/paas/v4
     api_key_env: ZAI_API_KEY
@@ -65,22 +65,46 @@ providers:
 # to the next, and so on.
 # ---------------------------------------------------------------------------
 routes:
-  coding-auto:
-    - provider: opencode-zen
-      model: x-preview-f-free
-    - provider: openrouter
-      model: stealth/ox-alpha
-    - provider: opencode-zen
-      model: nemotron-3.5-lightning-free
-    - provider: openrouter
-      model: z-ai/glm-5.2:free
-
   agent-auto:
     - provider: opencode-zen
-      model: x-preview-f-free
+      model: nemotron-3.5-lightning-free
     - provider: openrouter
-      model: stealth/ox-alpha
+      model: nvidia/nemotron-3.5-lightning:free
+    - provider: openrouter
+      model: poolside/laguna-s-2.1:free
+    - provider: openrouter
+      model: z-ai/glm-5.2:free
+    - provider: openrouter
+      model: openrouter/free
+
+  coding-auto:
     - provider: opencode-zen
       model: nemotron-3.5-lightning-free
     - provider: openrouter
+      model: poolside/laguna-s-2.1:free
+    - provider: openrouter
       model: z-ai/glm-5.2:free
+    - provider: openrouter
+      model: cohere/north-mini-code:free
+
+  agent-auto-pay:
+    - provider: opencode-zen
+      model: nemotron-3.5-lightning-free
+    - provider: openrouter
+      model: nvidia/nemotron-3.5-lightning:free
+    - provider: openrouter
+      model: poolside/laguna-s-2.1:free
+    - provider: openrouter
+      model: z-ai/glm-5.2:free
+    - provider: openrouter
+      model: deepseek/deepseek-v4-flash-latest
+
+  coding-auto-pay:
+    - provider: openrouter
+      model: poolside/laguna-s-2.1:free
+    - provider: openrouter
+      model: z-ai/glm-5.2:free
+    - provider: openrouter
+      model: cohere/north-mini-code:free
+    - provider: openrouter
+      model: deepseek/deepseek-v4-flash-0731

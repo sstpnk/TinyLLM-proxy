@@ -10,7 +10,7 @@ FROM python:3.11-slim AS builder
 WORKDIR /build
 COPY requirements.txt .
 
-RUN pip install --no-cache-dir --user -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 # -- runtime -----------------------------------------------------------------
 FROM python:3.11-slim
@@ -21,20 +21,15 @@ RUN addgroup --system --gid 1001 tinyllm \
 
 WORKDIR /app
 
-# Copy installed site-packages from builder
-COPY --from=builder /root/.local /root/.local
+# Copy installed site-packages from builder (system-wide)
+COPY --from=builder /usr/local/lib/python3.11/site-packages/ /usr/local/lib/python3.11/site-packages/
 
 # Copy application code
 COPY tinyllm/ tinyllm/
 COPY config.yaml .
 
 # Environment
-ENV PATH=/root/.local/bin:$PATH \
-    PYTHONUNBUFFERED=1 \
-    TINYLLM_API_KEYS="" \
-    OPENCODE_ZEN_API_KEY="" \
-    OPENROUTER_API_KEY="" \
-    ZAI_API_KEY=""
+ENV PYTHONUNBUFFERED=1
 
 EXPOSE 4000
 

@@ -21,6 +21,13 @@ class ProviderConfig:
 
     def __init__(self, name: str, data: dict[str, Any]) -> None:
         self.name = name
+        if not isinstance(data, dict):
+            raise ConfigError(f"Provider '{self.name}': config must be a mapping")
+        for field in ("base_url", "api_key_env"):
+            if field not in data:
+                raise ConfigError(
+                    f"Provider '{self.name}': missing required field {field}"
+                )
         self.type: str = data.get("type", "openai-compatible")
         self.base_url: str = data["base_url"].rstrip("/")
         self.api_key_env: str = data["api_key_env"]
@@ -84,6 +91,8 @@ class AppConfig:
         routing = data.get("routing", {})
         self.cooldown_seconds: int = int(routing.get("cooldown_seconds", 300))
         self.max_attempts: int = int(routing.get("max_attempts", 3))
+        if self.max_attempts < 1:
+            raise ConfigError("routing.max_attempts must be >= 1")
 
         # --- timeouts ---
         self.timeouts = TimeoutConfig(data.get("timeouts", {}))
@@ -102,6 +111,7 @@ class AppConfig:
             raise ConfigError("No routes defined in config")
         if not self.providers:
             raise ConfigError("No providers defined in config")
+        self._validate_routes()
 
     # ------------------------------------------------------------------
 
@@ -114,6 +124,17 @@ class AppConfig:
     @property
     def route_names(self) -> list[str]:
         return list(self.routes.keys())
+
+    def _validate_routes(self) -> None:
+        for route_name, route in self.routes.items():
+            if not route.steps:
+                raise ConfigError(f"Route '{route_name}': no steps defined")
+            for idx, step in enumerate(route.steps, start=1):
+                if step.provider not in self.providers:
+                    raise ConfigError(
+                        f"Route '{route_name}' step {idx}: "
+                        f"unknown provider '{step.provider}'"
+                    )
 
 
 # ------------------------------------------------------------------
