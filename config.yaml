@@ -57,6 +57,11 @@ providers:
     base_url: https://api.z.ai/api/paas/v4
     api_key_env: ZAI_API_KEY
 
+  orcarouter:
+    type: openai-compatible
+    base_url: https://api.orcarouter.ai/v1
+    api_key_env: ORCAROUTER_API_KEY
+
 # ---------------------------------------------------------------------------
 # Route definitions
 #
@@ -108,3 +113,7 @@ routes:
       model: cohere/north-mini-code:free
     - provider: openrouter
       model: deepseek/deepseek-v4-flash-0731
+
+  coding-deepseek:
+    - provider: orcarouter
+      model: deepseek/deepseek-v4-flash-free

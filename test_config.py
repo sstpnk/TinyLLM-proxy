@@ -10,6 +10,7 @@ TEST_ENV = {
     "OPENCODE_ZEN_API_KEY": "test-opencode",
     "OPENROUTER_API_KEY": "test-openrouter",
     "ZAI_API_KEY": "test-zai",
+    "ORCAROUTER_API_KEY": "test-orca",
 }
 
 EXPECTED_ROUTES = {
@@ -32,6 +33,9 @@ EXPECTED_ROUTES = {
         ("openrouter", "poolside/laguna-s-2.1:free"),
         ("openrouter", "z-ai/glm-5.2:free"),
         ("openrouter", "deepseek/deepseek-v4-flash-latest"),
+    ],
+    "coding-deepseek": [
+        ("orcarouter", "deepseek/deepseek-v4-flash-free"),
     ],
     "coding-auto-pay": [
         ("openrouter", "poolside/laguna-s-2.1:free"),
