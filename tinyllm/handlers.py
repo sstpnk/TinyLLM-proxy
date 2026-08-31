@@ -22,6 +22,21 @@ from .state import AppState
 
 logger = logging.getLogger("tinyllm.handlers")
 
+_MODEL_CONTEXT_LENGTHS = {
+    "x-preview-f-free": 262144,
+    "stealth/ox-alpha": 128000,
+    "nemotron-3.5-lightning-free": 262144,
+    "nvidia/nemotron-3.5-lightning:free": 262144,
+    "poolside/laguna-s-2.1:free": 1048576,
+    "z-ai/glm-5.2:free": 1048576,
+    "openrouter/free": 128000,
+    "cohere/north-mini-code:free": 256000,
+    "deepseek/deepseek-v4-flash-latest": 1048576,
+    "deepseek/deepseek-v4-flash-0731": 1048576,
+    "deepseek/deepseek-v4-flash-free": 1048576,
+}
+
+_DEFAULT_CONTEXT_LENGTH = 128000
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -319,16 +334,16 @@ async def _forward_stream(
 
 
 async def handle_list_models(request: web.Request) -> web.Response:
-    """Return configured routes as available models."""
+    """Return configured routes as OpenAI-compatible model records."""
     state: AppState = request.app["state"]
 
     data = [
-        {
-            "id": name,
-            "object": "model",
-            "created": int(state._start_time),
-            "owned_by": "tinyllm",
-        }
+        _model_entry(
+            name,
+            state.config.routes[name],
+            int(state._start_time),
+            state.config,
+        )
         for name in state.config.route_names
     ]
 
@@ -349,6 +364,29 @@ async def handle_health(request: web.Request) -> web.Response:
 # Internal helpers
 # ---------------------------------------------------------------------------
 
+
+def _model_entry(route_name: str, route, created: int, config) -> dict[str, Any]:
+    """Build a model record for a configured TinyLLM route."""
+    steps = _route_steps_to_try(route, config)
+    context_length = _route_context_length(steps)
+    owned_by = steps[0].provider if steps else "tinyllm"
+    return {
+        "id": route_name,
+        "object": "model",
+        "created": created,
+        "owned_by": owned_by,
+        "context_length": context_length,
+        "max_model_len": context_length,
+    }
+
+
+def _route_context_length(steps) -> int:
+    """Return the safe context length for a fallback chain."""
+    lengths = [
+        _MODEL_CONTEXT_LENGTHS.get(step.model, _DEFAULT_CONTEXT_LENGTH)
+        for step in steps
+    ]
+    return min(lengths) if lengths else _DEFAULT_CONTEXT_LENGTH
 
 def _replace_model_in_event(raw_event: bytes, model: str) -> bytes:
     """Replace ``model`` JSON field in a single complete SSE *raw_event*.

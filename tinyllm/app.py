@@ -13,6 +13,11 @@ from .state import AppState
 
 logger = logging.getLogger("tinyllm")
 
+_AUTH_EXEMPT_PATHS = {
+    "/health/liveliness",
+    "/tinyllm/v1/models",
+}
+
 # ---------------------------------------------------------------------------
 # Application factory
 # ---------------------------------------------------------------------------
@@ -40,6 +45,7 @@ def create_app(config: AppConfig) -> web.Application:
     # --- routes ---
     app.router.add_post("/v1/chat/completions", handle_chat_completions)
     app.router.add_get("/v1/models", handle_list_models)
+    app.router.add_get("/tinyllm/v1/models", handle_list_models)
     app.router.add_get("/health/liveliness", handle_health)
 
     logger.info(
@@ -61,7 +67,7 @@ async def _auth_middleware(
     request: web.Request, handler: web.RequestHandler
 ) -> web.Response:
     """Validate Bearer token on all endpoints except /health/liveliness."""
-    if request.path == "/health/liveliness":
+    if request.path in _AUTH_EXEMPT_PATHS:
         return await handler(request)
 
     auth = request.headers.get("Authorization", "")
