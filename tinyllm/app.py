@@ -95,6 +95,13 @@ async def _auth_middleware(
 
     key = auth[7:]
     config: AppConfig = request.app["config"]
+    if request.path.startswith("/v1/admin/") and config.admin_token:
+        if key != config.admin_token:
+            return web.json_response(
+                {"error": {"message": "Invalid admin token", "type": "auth_error"}},
+                status=401,
+            )
+        return await handler(request)
     if key not in config.api_keys:
         return web.json_response(
             {"error": {"message": "Invalid API key", "type": "auth_error"}},
