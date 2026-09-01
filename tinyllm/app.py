@@ -19,8 +19,9 @@ from .state import AppState
 logger = logging.getLogger("tinyllm")
 
 _AUTH_EXEMPT_PATHS = {
-    "/health/liveliness",
-    "/tinyllm/v1/models",
+ "/health/liveliness",
+ "/health/readiness",
+ "/tinyllm/v1/models",
 }
 
 # ---------------------------------------------------------------------------
