@@ -55,6 +55,10 @@ def create_app(config: AppConfig) -> web.Application:
     app.router.add_get("/health/liveliness", handle_health)
     app.router.add_get("/health/readiness", handle_readiness)
 
+    if config.admin_token:
+        from .handlers import handle_admin_upstreams
+        app.router.add_get("/v1/admin/upstreams", handle_admin_upstreams)
+
     logger.info(
         "App created: %d route(s), %d provider(s), %d api key(s)",
         len(config.routes),

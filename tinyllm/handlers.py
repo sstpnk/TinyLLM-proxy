@@ -22,6 +22,7 @@ from .provider import ProviderClient, ProviderError
 from .state import AppState
 
 logger = logging.getLogger("tinyllm.handlers")
+access_logger = logging.getLogger("tinyllm.access")
 
 _MODEL_CONTEXT_LENGTHS = {
     "x-preview-f-free": 262144,
@@ -117,7 +118,7 @@ async def _handle_non_streaming(
     """Non-streaming: try providers in order, return first success."""
     client_model = body.get("model", "")
 
-    for step in _route_steps_to_try(route, state.config):
+    for step in _route_steps_to_try(route, state.config, state):
         if state.is_cooldown_active(step.provider, step.model):
             continue
 
@@ -126,21 +127,7 @@ async def _handle_non_streaming(
             data = await provider.send_non_streaming(step, body)
         except ProviderError as exc:
             latency = (time.monotonic() - start) * 1000
-            logger.info(
-                "request=%s route=%s provider=%s model=%s "
-                "attempt=%d status=%s latency=%.0fms fallback=%s",
-                rid,
-                route.name,
-                step.provider,
-                step.model,
-                _attempt_index(route, step),
-                exc.error_type,
-                latency,
-                _next_provider(route, step),
-            )
-            state.metrics.total_fallbacks += 1
-            state.mark_error(step.provider, step.model, exc.error_type)
-
+            _record_error(state, step, exc, latency, rid, route)
             if not exc.should_fallback():
                 return _openai_error(
                     exc.status_code or 400,
@@ -155,6 +142,14 @@ async def _handle_non_streaming(
         state.metrics.successful_requests += 1
         state.metrics.total_latency_ms += latency
         state.mark_success(step.provider, step.model)
+        empty = _is_response_empty(data)
+        stats = state.upstream_registry.get_or_create(step.provider, step.model)
+        stats.record(
+            status=200,
+            empty=empty,
+            timeout=False,
+            latency_ms=latency,
+        )
 
         logger.info(
             "request=%s route=%s provider=%s model=%s "
@@ -197,7 +192,7 @@ async def _handle_streaming(
     provider: ProviderClient,
 ) -> web.Response:
     """Streaming: try providers in order, forward SSE chunks on first success."""
-    for step in _route_steps_to_try(route, state.config):
+    for step in _route_steps_to_try(route, state.config, state):
         if state.is_cooldown_active(step.provider, step.model):
             continue
 
@@ -217,6 +212,13 @@ async def _handle_streaming(
             )
             state.metrics.total_fallbacks += 1
             state.mark_error(step.provider, step.model, exc.error_type)
+            stats = state.upstream_registry.get_or_create(step.provider, step.model)
+            stats.record(
+                status=exc.status_code or None,
+                empty=False,
+                timeout=exc.error_type == "timeout",
+                latency_ms=0.0,
+            )
 
             if not exc.should_fallback():
                 return _openai_error(
@@ -443,9 +445,37 @@ def _replace_model_in_event(raw_event: bytes, model: str) -> bytes:
     return raw_event
 
 
-def _route_steps_to_try(route, config) -> list:
-    """Return the configured route steps limited by routing.max_attempts."""
-    return route.steps[: config.max_attempts]
+def _route_steps_to_try(route, config, state: "AppState | None" = None):
+    """Return the configured route steps limited by routing.max_attempts.
+
+    When ``state`` is provided the list is reordered by reliability score
+    and poor-performers are filtered out (a warning is logged for each
+    drop). The fallback never empties the list entirely — if everything
+    is filtered, the original order is used so the request still
+    completes.
+    """
+    steps = list(route.steps)
+    if state is not None:
+        from .reliability import UpstreamRegistry
+        registry: UpstreamRegistry = state.upstream_registry
+        ordered, dropped = registry.trust_filter(
+            steps,
+            min_requests=config.min_requests_for_trust,
+            min_success_rate=config.min_success_rate,
+            max_empty_rate=config.max_empty_rate,
+            min_score=config.min_score,
+        )
+        for d in dropped:
+            logger.info(
+                "reliability_drop provider=%s model=%s reason=%s score=%s",
+                d["provider"],
+                d["model"],
+                d["reason"],
+                d.get("score"),
+            )
+        if ordered:
+            steps = ordered
+    return steps[: config.max_attempts]
 
 
 def _attempt_index(route, step) -> int:
@@ -465,3 +495,72 @@ def _next_provider(route, step) -> str:
     except ValueError:
         pass
     return "none"
+
+
+# ---------------------------------------------------------------------------
+# Reliability helpers
+# ---------------------------------------------------------------------------
+
+
+def _record_error(
+    state: "AppState",
+    step,
+    exc: "ProviderError",
+    latency_ms: float,
+    rid: str,
+    route,
+) -> None:
+    """Log the failed attempt and record stats for the upstream."""
+    logger.info(
+        "request=%s route=%s provider=%s model=%s "
+        "attempt=%d status=%s latency=%.0fms fallback=%s",
+        rid,
+        route.name,
+        step.provider,
+        step.model,
+        _attempt_index(route, step),
+        exc.error_type,
+        latency_ms,
+        _next_provider(route, step),
+    )
+    state.metrics.total_fallbacks += 1
+    state.mark_error(step.provider, step.model, exc.error_type)
+    stats = state.upstream_registry.get_or_create(step.provider, step.model)
+    stats.record(
+        status=exc.status_code or None,
+        empty=False,
+        timeout=exc.error_type == "timeout",
+        latency_ms=latency_ms,
+    )
+
+
+def _is_response_empty(data) -> bool:
+    """Return True if the response carries no usable content."""
+    if not isinstance(data, dict):
+        return False
+    choices = data.get("choices") or []
+    if not choices:
+        return True
+    first = choices[0] if isinstance(choices[0], dict) else {}
+    msg = first.get("message") or {}
+    content = (msg.get("content") or "").strip()
+    reasoning = (msg.get("reasoning_content") or "").strip()
+    return not content and not reasoning
+
+
+async def handle_admin_upstreams(request: web.Request) -> web.Response:
+    """Return per-upstream reliability counters.
+
+    Requires ``Authorization: Bearer <TINYLLM_ADMIN_TOKEN>`` and is only
+    registered when that token is configured (see ``app.create_app``).
+    """
+    state: AppState = request.app["state"]
+    items = state.upstream_registry.snapshot()
+    for item in items:
+        stats = state.upstream_registry.get_or_create(
+            item["provider"], item["model"]
+        )
+        item["score"] = stats.score(
+            min_requests=state.config.min_requests_for_trust
+        )
+    return web.json_response({"object": "list", "upstreams": items})

@@ -20,8 +20,16 @@ auth:
 routing:
   # Seconds to exclude a provider+model after a fallback-eligible error.
   cooldown_seconds: 300
-  # Maximum providers to try before giving up.
+  # Maximum attempts to try before giving up.
   max_attempts: 5
+  # Reliability ranking thresholds (see tinyllm/reliability.py).
+  min_requests_for_trust: 20
+  min_success_rate: 0.5
+  max_empty_rate: 0.3
+  min_score: 0.0
+
+admin:
+  token_env: TINYLLM_ADMIN_TOKEN
 
 # ---------------------------------------------------------------------------
 # Timeouts (seconds)

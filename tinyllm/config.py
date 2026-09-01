@@ -93,6 +93,15 @@ class AppConfig:
         self.max_attempts: int = int(routing.get("max_attempts", 3))
         if self.max_attempts < 1:
             raise ConfigError("routing.max_attempts must be >= 1")
+        self.min_requests_for_trust: int = int(routing.get("min_requests_for_trust", 20))
+        self.min_success_rate: float = float(routing.get("min_success_rate", 0.5))
+        self.max_empty_rate: float = float(routing.get("max_empty_rate", 0.3))
+        self.min_score: float = float(routing.get("min_score", 0.0))
+
+        # --- admin ---
+        admin = data.get("admin", {})
+        self.admin_token_env: str = admin.get("token_env", "TINYLLM_ADMIN_TOKEN")
+        self.admin_token: str | None = os.environ.get(self.admin_token_env) or None
 
         # --- timeouts ---
         self.timeouts = TimeoutConfig(data.get("timeouts", {}))
