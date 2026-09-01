@@ -7,7 +7,12 @@ import logging
 from aiohttp import web
 
 from .config import AppConfig
-from .handlers import handle_chat_completions, handle_health, handle_list_models
+from .handlers import (
+    handle_chat_completions,
+    handle_health,
+    handle_list_models,
+    handle_readiness,
+)
 from .provider import ProviderClient
 from .state import AppState
 
@@ -47,6 +52,7 @@ def create_app(config: AppConfig) -> web.Application:
     app.router.add_get("/v1/models", handle_list_models)
     app.router.add_get("/tinyllm/v1/models", handle_list_models)
     app.router.add_get("/health/liveliness", handle_health)
+    app.router.add_get("/health/readiness", handle_readiness)
 
     logger.info(
         "App created: %d route(s), %d provider(s), %d api key(s)",

@@ -1,9 +1,10 @@
 """HTTP request handlers for TinyLLM.
 
 Implements:
-  - POST /v1/chat/completions   (non-streaming + streaming with fallback)
-  - GET  /v1/models
-  - GET  /health/liveliness
+ - POST /v1/chat/completions (non-streaming + streaming with fallback)
+ - GET /v1/models
+ - GET /health/liveliness
+ - GET /health/readiness
 """
 
 from __future__ import annotations
@@ -356,8 +357,23 @@ async def handle_list_models(request: web.Request) -> web.Response:
 
 
 async def handle_health(request: web.Request) -> web.Response:
-    """Liveness probe — always returns 200 when the service is alive."""
-    return web.json_response({"status": "ok"})
+ """Liveness probe — always returns 200 when the service is alive."""
+ return web.json_response({"status": "ok"})
+
+
+async def handle_readiness(request: web.Request) -> web.Response:
+ """Readiness probe — 200 if any upstream is healthy, 503 if all cooling down.
+
+ Used by orchestrators to remove the pod from rotation while the
+ process itself is still alive. Reads cooldown state from
+ ``request.app['state']`` populated by ``app.create_app``.
+ """
+ state: AppState = request.app["state"]
+ payload: dict[str, Any] = {
+ "status": "ok",
+ "cooling_providers": state.get_cooldown_summary(),
+ }
+ return web.json_response(payload, status=200)
 
 
 # ---------------------------------------------------------------------------
