@@ -35,7 +35,7 @@ EXPOSE 4000
 
 USER tinyllm
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=2 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:4000/health/liveliness')" || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:4000/health/liveliness', timeout=4)" || exit 1
 
 ENTRYPOINT ["python", "-m", "tinyllm"]

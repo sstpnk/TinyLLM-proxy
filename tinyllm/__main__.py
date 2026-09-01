@@ -7,13 +7,16 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
+from pathlib import Path
 
 from aiohttp import web
 
 from . import __version__
 from .app import create_app
 from .config import ConfigError, load_config
+from .logging_config import configure_logging
 
 _LOG = logging.getLogger("tinyllm")
 
@@ -46,16 +49,10 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def _setup_logging(verbose: bool) -> None:
-    level = logging.DEBUG if verbose else logging.INFO
-    fmt = (
-        "%(asctime)s pid=%(process)d %(name)s %(levelname)s %(message)s"
-    )
-    logging.basicConfig(
-        level=level,
-        format=fmt,
-        datefmt="%Y-%m-%dT%H:%M:%S",
-        stream=sys.stdout,
-    )
+    level = "DEBUG" if verbose else "INFO"
+    log_path = Path(os.environ.get("TINYLLM_LOG_FILE", "/app/tinyllm.log"))
+    configure_logging(log_path, level=level)
+    _LOG.debug("Logging configured: file=%s level=%s", log_path, level)
 
 
 # ---------------------------------------------------------------------------
