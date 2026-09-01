@@ -34,6 +34,9 @@ class Metrics:
     total_latency_ms: float = 0.0
 
 
+from .reliability import UpstreamRegistry
+
+
 class AppState:
     """Thread-safe application state container."""
 
@@ -42,6 +45,7 @@ class AppState:
         self._lock = Lock()
         self._provider_states: dict[str, ProviderState] = {}
         self.metrics = Metrics()
+        self.upstream_registry = UpstreamRegistry()
         self._start_time = time.time()
 
     # -- cooldown ----------------------------------------------------------
