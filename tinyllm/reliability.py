@@ -141,7 +141,8 @@ class UpstreamRegistry:
         Returns ``(filtered_steps, dropped)`` where ``dropped`` is a list of
         ``{"provider": ..., "model": ..., "reason": ...}`` for logging.
         """
-        scored: list[tuple[float, object, dict]] = []
+        scored: list[tuple[float, object]] = []
+        dropped: list[dict] = []
         for step in steps:
             stats = self.get_or_create(step.provider, step.model)
             sc = stats.score(min_requests=min_requests)
@@ -172,11 +173,10 @@ class UpstreamRegistry:
                     }
                 )
                 continue
-            scored.append((sc, step, {"score": sc}))
+            scored.append((sc, step))
 
         # Stable sort: models without score (sc=-inf) keep original order,
-        # models with score go highest first. We pair the bare list index
-        # to make sort stable.
-        indexed = [(idx, sc, step) for idx, (sc, step, _) in enumerate(scored)]
+        # models with score go highest first.
+        indexed = [(idx, sc, step) for idx, (sc, step) in enumerate(scored)]
         indexed.sort(key=lambda t: (-float("-inf") if t[1] == float("-inf") else -t[1], t[0]))
         return [step for _, _, step in indexed], dropped
