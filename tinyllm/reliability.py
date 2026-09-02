@@ -158,7 +158,7 @@ class UpstreamRegistry:
             reason: str | None = None
             if n >= min_requests and success_rate < min_success_rate:
                 reason = f"success_rate<{min_success_rate:.2f}"
-            elif empty_rate > max_empty_rate:
+            elif n >= min_requests and empty_rate > max_empty_rate:
                 reason = f"empty_rate>{max_empty_rate:.2f}"
             elif sc != float("-inf") and sc < min_score:
                 reason = f"score<{min_score:.1f}"
