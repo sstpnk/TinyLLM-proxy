@@ -7,7 +7,7 @@ Each ``(provider, model)`` pair keeps:
  - latency p95 over a sliding window of the last ``WINDOW_SIZE`` samples
 
 A composite ``score`` summarises reliability; ``handler._route_steps_to_try``
-uses it to reorder and possibly drop low-trust models.
+uses it to reorder and deprioritize low-trust models.
 """
 
 from __future__ import annotations
@@ -60,11 +60,7 @@ class UpstreamStats:
     @property
     def latency_p95_ms(self) -> float:
         with self._lock:
-            if not self._latencies_ms:
-                return 0.0
-            sample = sorted(self._latencies_ms)
-            idx = max(0, math.ceil(0.95 * len(sample)) - 1)
-            return sample[idx]
+            return _p95(self._latencies_ms)
 
     def score(self, *, min_requests: int) -> float:
         """Composite reliability score.
@@ -112,6 +108,7 @@ class UpstreamRegistry:
         out: list[dict] = []
         for (provider, model), s in items:
             with s._lock:
+                p95 = _p95(s._latencies_ms)
                 out.append(
                     {
                         "provider": provider,
@@ -121,7 +118,7 @@ class UpstreamRegistry:
                         "errors_4xx": s.requests_error_4xx,
                         "errors_5xx": s.requests_error_5xx,
                         "timeouts": s.requests_timeout,
-                        "p95_ms": s.latency_p95_ms,
+                        "p95_ms": p95,
                         "last_update": s._last_update,
                     }
                 )
@@ -136,12 +133,15 @@ class UpstreamRegistry:
         max_empty_rate: float,
         min_score: float,
     ) -> tuple[list, list[dict]]:
-        """Reorder *steps* by score and drop untrusted ones.
+        """Reorder *steps* by score and deprioritize untrusted ones.
 
-        Returns ``(filtered_steps, dropped)`` where ``dropped`` is a list of
+        Returns ``(ordered_steps, dropped)`` where ``dropped`` is a list of
         ``{"provider": ..., "model": ..., "reason": ...}`` for logging.
+        Untrusted steps are kept at the end so fallback can still reach them
+        when higher-ranked providers are unavailable.
         """
         scored: list[tuple[float, object]] = []
+        deprioritized: list[object] = []
         dropped: list[dict] = []
         for step in steps:
             stats = self.get_or_create(step.provider, step.model)
@@ -172,6 +172,7 @@ class UpstreamRegistry:
                         "score": sc,
                     }
                 )
+                deprioritized.append(step)
                 continue
             scored.append((sc, step))
 
@@ -179,4 +180,12 @@ class UpstreamRegistry:
         # models with score go highest first.
         indexed = [(idx, sc, step) for idx, (sc, step) in enumerate(scored)]
         indexed.sort(key=lambda t: (-float("-inf") if t[1] == float("-inf") else -t[1], t[0]))
-        return [step for _, _, step in indexed], dropped
+        return [step for _, _, step in indexed] + deprioritized, dropped
+
+
+def _p95(latencies_ms: Deque[float]) -> float:
+    if not latencies_ms:
+        return 0.0
+    sample = sorted(latencies_ms)
+    idx = max(0, math.ceil(0.95 * len(sample)) - 1)
+    return sample[idx]

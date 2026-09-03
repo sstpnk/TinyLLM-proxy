@@ -118,10 +118,7 @@ async def _handle_non_streaming(
     """Non-streaming: try providers in order, return first success."""
     client_model = body.get("model", "")
 
-    for step in _route_steps_to_try(route, state.config, state):
-        if state.is_cooldown_active(step.provider, step.model):
-            continue
-
+    for step in _route_steps_to_try_with_cooldown(route, state.config, state, rid):
         start = time.monotonic()
         try:
             data = await provider.send_non_streaming(step, body)
@@ -192,10 +189,7 @@ async def _handle_streaming(
     provider: ProviderClient,
 ) -> web.Response:
     """Streaming: try providers in order, forward SSE chunks on first success."""
-    for step in _route_steps_to_try(route, state.config, state):
-        if state.is_cooldown_active(step.provider, step.model):
-            continue
-
+    for step in _route_steps_to_try_with_cooldown(route, state.config, state, rid):
         try:
             upstream = await provider.send_streaming(step, body)
         except ProviderError as exc:
@@ -449,10 +443,7 @@ def _route_steps_to_try(route, config, state: "AppState | None" = None):
     """Return the configured route steps limited by routing.max_attempts.
 
     When ``state`` is provided the list is reordered by reliability score
-    and poor-performers are filtered out (a warning is logged for each
-    drop). The fallback never empties the list entirely — if everything
-    is filtered, the original order is used so the request still
-    completes.
+    and poor-performers are moved behind healthy candidates.
     """
     steps = list(route.steps)
     if state is not None:
@@ -467,7 +458,7 @@ def _route_steps_to_try(route, config, state: "AppState | None" = None):
         )
         for d in dropped:
             logger.info(
-                "reliability_drop provider=%s model=%s reason=%s score=%s",
+                "reliability_deprioritize provider=%s model=%s reason=%s score=%s",
                 d["provider"],
                 d["model"],
                 d["reason"],
@@ -476,6 +467,32 @@ def _route_steps_to_try(route, config, state: "AppState | None" = None):
         if ordered:
             steps = ordered
     return steps[: config.max_attempts]
+
+
+def _route_steps_to_try_with_cooldown(route, config, state: "AppState", rid: str):
+    """Return route steps after cooldown filtering.
+
+    Cooldown should reduce pressure on a failing upstream, but it must not
+    empty a route. When every candidate is cooling down, try the ordered route
+    anyway so a bursty client can still reach a recovered fallback.
+    """
+    steps = _route_steps_to_try(route, config, state)
+    available = [
+        step
+        for step in steps
+        if not state.is_cooldown_active(step.provider, step.model)
+    ]
+    if available:
+        return available
+
+    if steps:
+        logger.info(
+            "request=%s route=%s cooldown_exhausted action=try_all candidates=%d",
+            rid,
+            route.name,
+            len(steps),
+        )
+    return steps
 
 
 def _attempt_index(route, step) -> int:
