@@ -15,32 +15,31 @@ TEST_ENV = {
 
 EXPECTED_ROUTES = {
     "agent-auto": [
-        ("opencode-zen", "nemotron-3.5-lightning-free"),
-        ("openrouter", "nvidia/nemotron-3.5-lightning:free"),
         ("openrouter", "poolside/laguna-s-2.1:free"),
-        ("openrouter", "z-ai/glm-5.2:free"),
-        ("openrouter", "openrouter/free"),
+        ("opencode-zen", "laguna-s-2.1-free"),
+        ("orcarouter", "deepseek/deepseek-v4-flash-free"),
     ],
     "coding-auto": [
-        ("opencode-zen", "nemotron-3.5-lightning-free"),
-        ("openrouter", "poolside/laguna-s-2.1:free"),
-        ("openrouter", "z-ai/glm-5.2:free"),
+        ("orcarouter", "deepseek/deepseek-v4-flash-free"),
         ("openrouter", "cohere/north-mini-code:free"),
+        ("openrouter", "poolside/laguna-s-2.1:free"),
+        ("openrouter", "minimax/minimax-m3:free"),
+        ("opencode-zen", "laguna-s-2.1-free"),
     ],
     "agent-auto-pay": [
-        ("opencode-zen", "nemotron-3.5-lightning-free"),
-        ("openrouter", "nvidia/nemotron-3.5-lightning:free"),
         ("openrouter", "poolside/laguna-s-2.1:free"),
-        ("openrouter", "z-ai/glm-5.2:free"),
-        ("openrouter", "deepseek/deepseek-v4-flash-latest"),
+        ("opencode-zen", "laguna-s-2.1-free"),
+        ("orcarouter", "deepseek/deepseek-v4-flash-free"),
     ],
     "coding-deepseek": [
         ("orcarouter", "deepseek/deepseek-v4-flash-free"),
     ],
     "coding-auto-pay": [
-        ("openrouter", "poolside/laguna-s-2.1:free"),
-        ("openrouter", "z-ai/glm-5.2:free"),
+        ("orcarouter", "deepseek/deepseek-v4-flash-free"),
         ("openrouter", "cohere/north-mini-code:free"),
+        ("openrouter", "poolside/laguna-s-2.1:free"),
+        ("openrouter", "minimax/minimax-m3:free"),
+        ("opencode-zen", "laguna-s-2.1-free"),
         ("openrouter", "deepseek/deepseek-v4-flash-0731"),
     ],
 }
@@ -51,10 +50,16 @@ class ConfigTests(unittest.TestCase):
         with patch.dict(os.environ, TEST_ENV, clear=False):
             return load_config("config.yaml")
 
-    def test_current_config_loads_with_openrouter_headers(self):
+    def test_current_config_loads_provider_headers(self):
         config = self.load_current_config()
 
         self.assertNotIn("headers", config.providers)
+        self.assertEqual(
+            config.providers["opencode-zen"].headers,
+            {
+                "User-Agent": "OpenAI/JS 6.45.0",
+            },
+        )
         self.assertEqual(
             config.providers["openrouter"].headers,
             {

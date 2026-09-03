@@ -21,7 +21,7 @@ routing:
   # Seconds to exclude a provider+model after a fallback-eligible error.
   cooldown_seconds: 300
   # Maximum attempts to try before giving up.
-  max_attempts: 5
+  max_attempts: 6
   # Reliability ranking thresholds (see tinyllm/reliability.py).
   min_requests_for_trust: 20
   min_success_rate: 0.5
@@ -51,6 +51,8 @@ providers:
     type: openai-compatible
     base_url: https://opencode.ai/zen/v1
     api_key_env: OPENCODE_ZEN_API_KEY
+    headers:
+      User-Agent: OpenAI/JS 6.45.0
 
   openrouter:
     type: openai-compatible
@@ -97,10 +99,8 @@ routes:
   agent-auto:
     - provider: openrouter
       model: poolside/laguna-s-2.1:free
-    - provider: openrouter
-      model: minimax/minimax-m3:free
     - provider: opencode-zen
-      model: muse-spark-1.2-contributor-free
+      model: laguna-s-2.1-free
     - provider: orcarouter
       model: deepseek/deepseek-v4-flash-free
 
@@ -114,15 +114,13 @@ routes:
     - provider: openrouter
       model: minimax/minimax-m3:free
     - provider: opencode-zen
-      model: muse-spark-1.2-contributor-free
+      model: laguna-s-2.1-free
 
   agent-auto-pay:
     - provider: openrouter
       model: poolside/laguna-s-2.1:free
-    - provider: openrouter
-      model: minimax/minimax-m3:free
     - provider: opencode-zen
-      model: muse-spark-1.2-contributor-free
+      model: laguna-s-2.1-free
     - provider: orcarouter
       model: deepseek/deepseek-v4-flash-free
 
@@ -136,7 +134,7 @@ routes:
     - provider: openrouter
       model: minimax/minimax-m3:free
     - provider: opencode-zen
-      model: muse-spark-1.2-contributor-free
+      model: laguna-s-2.1-free
     - provider: openrouter
       model: deepseek/deepseek-v4-flash-0731
 
