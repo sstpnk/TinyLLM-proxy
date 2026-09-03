@@ -85,14 +85,12 @@ providers:
 # 1	DeepSeek V4 Flash	8.5
 # 2	North Mini Code	8.4
 # 3	Laguna S 2.1	8.4
-# 4	MiniMax M3	8.2
-# 5	Muse Spark 1.2	8.0
+# 4	Muse Spark 1.2	8.0
 # 
 # ТОП-5 для агента
 # 1	Laguna S 2.1	8.4
-# 2	MiniMax M3	8.3
-# 3	Muse Spark 1.2	8.2
-# 4	DeepSeek V4 Flash	8.0
+# 2	Muse Spark 1.2	8.2
+# 3	DeepSeek V4 Flash	8.0
 # 
 # ---------------------------------------------------------------------------
 routes:
@@ -111,8 +109,6 @@ routes:
       model: cohere/north-mini-code:free
     - provider: openrouter
       model: poolside/laguna-s-2.1:free
-    - provider: openrouter
-      model: minimax/minimax-m3:free
     - provider: opencode-zen
       model: laguna-s-2.1-free
 
@@ -131,8 +127,6 @@ routes:
       model: cohere/north-mini-code:free
     - provider: openrouter
       model: poolside/laguna-s-2.1:free
-    - provider: openrouter
-      model: minimax/minimax-m3:free
     - provider: opencode-zen
       model: laguna-s-2.1-free
     - provider: openrouter

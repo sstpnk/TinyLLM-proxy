@@ -23,7 +23,6 @@ EXPECTED_ROUTES = {
         ("orcarouter", "deepseek/deepseek-v4-flash-free"),
         ("openrouter", "cohere/north-mini-code:free"),
         ("openrouter", "poolside/laguna-s-2.1:free"),
-        ("openrouter", "minimax/minimax-m3:free"),
         ("opencode-zen", "laguna-s-2.1-free"),
     ],
     "agent-auto-pay": [
@@ -38,7 +37,6 @@ EXPECTED_ROUTES = {
         ("orcarouter", "deepseek/deepseek-v4-flash-free"),
         ("openrouter", "cohere/north-mini-code:free"),
         ("openrouter", "poolside/laguna-s-2.1:free"),
-        ("openrouter", "minimax/minimax-m3:free"),
         ("opencode-zen", "laguna-s-2.1-free"),
         ("openrouter", "deepseek/deepseek-v4-flash-0731"),
     ],
