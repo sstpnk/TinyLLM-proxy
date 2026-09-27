@@ -159,7 +159,12 @@ class AppConfig:
         self.routes: dict[str, Route] = {}
         route_metadata = data.get("_route_metadata", {})
         for name, steps in data.get("routes", {}).items():
-            self.routes[name] = Route(name, steps, route_metadata.get(name))
+            metadata = route_metadata.get(name) or _infer_route_metadata(
+                name,
+                steps,
+                self.providers,
+            )
+            self.routes[name] = Route(name, steps, metadata)
 
         if not self.routes:
             raise ConfigError("No routes defined in config")
@@ -311,6 +316,31 @@ def split_model_identity(provider: str, upstream_model: str) -> tuple[str, str]:
         vendor = upstream_model.split("-", 1)[0]
         return vendor, upstream_model
     return provider, upstream_model
+
+
+def _infer_route_metadata(
+    route_name: str,
+    steps: list[dict[str, str]],
+    providers: dict[str, ProviderConfig],
+) -> dict[str, Any] | None:
+    """Infer raw model metadata for static routes named provider/upstream_model."""
+    if len(steps) != 1 or "/" not in route_name:
+        return None
+    provider_name, upstream_model = route_name.split("/", 1)
+    if provider_name not in providers:
+        return None
+    step = steps[0]
+    if step.get("provider") != provider_name or step.get("model") != upstream_model:
+        return None
+    vendor, model_name = split_model_identity(provider_name, upstream_model)
+    return {
+        "source": "static",
+        "route_type": "raw_model",
+        "provider": provider_name,
+        "vendor": vendor,
+        "upstream_model": upstream_model,
+        "model_name": model_name,
+    }
 
 
 def download_dynamic_config(target_path: str) -> bool:

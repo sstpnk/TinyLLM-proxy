@@ -11,6 +11,7 @@ TEST_ENV = {
     "OPENROUTER_API_KEY": "test-openrouter",
     "ZAI_API_KEY": "test-zai",
     "ORCAROUTER_API_KEY": "test-orca",
+    "DEEPSEEK2API_API_KEY": "test-deepseek2api",
 }
 
 EXPECTED_ROUTES = {
@@ -32,6 +33,16 @@ EXPECTED_ROUTES = {
     ],
     "coding-deepseek": [
         ("orcarouter", "deepseek/deepseek-v4-flash-free"),
+    ],
+    "coding-deepseek2api": [
+        ("deepseek2api", "deepseek-v4-flash"),
+        ("deepseek2api", "deepseek-v4-pro"),
+    ],
+    "deepseek2api/deepseek-v4-flash": [
+        ("deepseek2api", "deepseek-v4-flash"),
+    ],
+    "deepseek2api/deepseek-v4-pro": [
+        ("deepseek2api", "deepseek-v4-pro"),
     ],
     "coding-auto-pay": [
         ("orcarouter", "deepseek/deepseek-v4-flash-free"),
@@ -83,6 +94,17 @@ class ConfigTests(unittest.TestCase):
         for route in config.routes.values():
             for step in route.steps:
                 self.assertIn(step.provider, config.providers)
+
+    def test_static_deepseek2api_raw_models_have_metadata(self):
+        config = self.load_current_config()
+        route = config.routes["deepseek2api/deepseek-v4-flash"]
+
+        self.assertEqual(route.route_type, "raw_model")
+        self.assertEqual(route.source, "static")
+        self.assertEqual(route.provider, "deepseek2api")
+        self.assertEqual(route.vendor, "deepseek")
+        self.assertEqual(route.upstream_model, "deepseek-v4-flash")
+        self.assertEqual(route.model_name, "deepseek-v4-flash")
 
     def test_max_attempts_covers_current_config_routes(self):
         config = self.load_current_config()

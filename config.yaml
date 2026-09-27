@@ -72,6 +72,11 @@ providers:
     base_url: https://api.orcarouter.ai/v1
     api_key_env: ORCAROUTER_API_KEY
 
+  deepseek2api:
+    type: openai-compatible
+    base_url: https://deepseek.stpnk.tech/v1
+    api_key_env: DEEPSEEK2API_API_KEY
+
 # ---------------------------------------------------------------------------
 # Route definitions
 #
@@ -135,3 +140,17 @@ routes:
   coding-deepseek:
     - provider: orcarouter
       model: deepseek/deepseek-v4-flash-free
+
+  coding-deepseek2api:
+    - provider: deepseek2api
+      model: deepseek-v4-flash
+    - provider: deepseek2api
+      model: deepseek-v4-pro
+
+  deepseek2api/deepseek-v4-flash:
+    - provider: deepseek2api
+      model: deepseek-v4-flash
+
+  deepseek2api/deepseek-v4-pro:
+    - provider: deepseek2api
+      model: deepseek-v4-pro
