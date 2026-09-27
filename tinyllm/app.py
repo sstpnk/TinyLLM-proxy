@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import os
+from pathlib import Path
 
 from aiohttp import web
 
 from .config import AppConfig
+from .config import ConfigError, download_dynamic_config, load_config_with_dynamic
 from .handlers import (
     handle_chat_completions,
     handle_health,
@@ -39,8 +43,18 @@ def create_app(config: AppConfig) -> web.Application:
 
     async def _init_provider(app: web.Application) -> None:
         app["provider"] = ProviderClient(config)
+        task = _maybe_start_dynamic_config_poller(app)
+        if task:
+            app["dynamic_config_task"] = task
 
     async def _cleanup(app: web.Application) -> None:
+        task: asyncio.Task | None = app.get("dynamic_config_task")
+        if task:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
         provider: ProviderClient | None = app.get("provider")
         if provider:
             await provider.close()
@@ -66,6 +80,105 @@ def create_app(config: AppConfig) -> web.Application:
         len(config.api_keys),
     )
     return app
+
+
+# ---------------------------------------------------------------------------
+# Dynamic config polling
+# ---------------------------------------------------------------------------
+
+
+def _maybe_start_dynamic_config_poller(app: web.Application) -> asyncio.Task | None:
+    config: AppConfig = app["config"]
+    if not config.dynamic_config_path:
+        if config.dynamic_config_url:
+            logger.warning(
+                "%s is set but %s is missing; dynamic config download disabled",
+                "TINYLLM_DYNAMIC_CONFIG_URL",
+                "TINYLLM_DYNAMIC_CONFIG_PATH",
+            )
+        return None
+
+    interval = _dynamic_poll_interval()
+    logger.info(
+        "dynamic_config polling enabled path=%s interval=%.1fs url=%s",
+        config.dynamic_config_path,
+        interval,
+        bool(config.dynamic_config_url),
+    )
+    return asyncio.create_task(_dynamic_config_poller(app, interval))
+
+
+def _dynamic_poll_interval() -> float:
+    raw = os.environ.get("TINYLLM_DYNAMIC_CONFIG_POLL_SECONDS", "30")
+    try:
+        return max(1.0, float(raw))
+    except ValueError:
+        logger.warning("invalid TINYLLM_DYNAMIC_CONFIG_POLL_SECONDS=%r; using 30", raw)
+        return 30.0
+
+
+async def _dynamic_config_poller(app: web.Application, interval: float) -> None:
+    signature = _dynamic_config_signature(app["config"].dynamic_config_path)
+    while True:
+        await asyncio.sleep(interval)
+        signature = await _refresh_dynamic_config_if_needed(app, signature)
+
+
+async def _refresh_dynamic_config_if_needed(
+    app: web.Application,
+    previous_signature: tuple[int, int] | None,
+) -> tuple[int, int] | None:
+    current: AppConfig = app["config"]
+    dynamic_path = current.dynamic_config_path
+    if not dynamic_path:
+        return previous_signature
+
+    downloaded = False
+    if current.dynamic_config_url:
+        try:
+            downloaded = await asyncio.to_thread(download_dynamic_config, dynamic_path)
+        except Exception as exc:  # noqa: BLE001 - keep serving old config
+            logger.warning("dynamic_config download failed: %s", exc)
+
+    signature = _dynamic_config_signature(dynamic_path)
+    if signature is None:
+        return previous_signature
+    if not downloaded and signature == previous_signature:
+        return previous_signature
+
+    try:
+        new_config = await asyncio.to_thread(
+            load_config_with_dynamic,
+            current.base_config_path or "config.yaml",
+            dynamic_path=dynamic_path,
+            strict_dynamic=True,
+        )
+    except (ConfigError, OSError) as exc:
+        logger.warning("dynamic_config reload rejected: %s", exc)
+        return previous_signature
+
+    app["config"] = new_config
+    state = app["state"]
+    state.config = new_config
+    provider: ProviderClient = app["provider"]
+    provider.config = new_config
+    logger.info(
+        "dynamic_config applied routes=%d providers=%d path=%s",
+        len(new_config.routes),
+        len(new_config.providers),
+        dynamic_path,
+    )
+    return signature
+
+
+def _dynamic_config_signature(path: str | None) -> tuple[int, int] | None:
+    if not path:
+        return None
+    try:
+        stat = Path(path).stat()
+    except OSError:
+        return None
+    return stat.st_mtime_ns, stat.st_size
 
 
 # ---------------------------------------------------------------------------

@@ -382,14 +382,25 @@ def _model_entry(route_name: str, route, created: int, config) -> dict[str, Any]
     steps = _route_steps_to_try(route, config)
     context_length = _route_context_length(steps)
     owned_by = steps[0].provider if steps else "tinyllm"
-    return {
+    entry = {
         "id": route_name,
         "object": "model",
         "created": created,
         "owned_by": owned_by,
         "context_length": context_length,
         "max_model_len": context_length,
+        "route_type": route.route_type,
+        "source": route.source,
     }
+    if route.provider:
+        entry["provider"] = route.provider
+    if route.vendor:
+        entry["vendor"] = route.vendor
+    if route.upstream_model:
+        entry["upstream_model"] = route.upstream_model
+    if route.model_name:
+        entry["model_name"] = route.model_name
+    return entry
 
 
 def _route_context_length(steps) -> int:
