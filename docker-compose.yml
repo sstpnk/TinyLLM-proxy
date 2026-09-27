@@ -20,6 +20,7 @@ services:
     volumes:
       # Mount config so it can be updated without rebuilding the image.
       - ./config.yaml:/app/config.yaml:ro
+      - ./dynamic:/app/dynamic:rw
       - ./tinyllm.log:/app/tinyllm.log:rw
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import socket, urllib.request; s=socket.socket(); s.settimeout(8); s.connect(('127.0.0.1',4000)); s.close(); r=urllib.request.urlopen('http://127.0.0.1:4000/health/liveliness', timeout=8); assert r.status==200\" || exit 1"]

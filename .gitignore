@@ -21,6 +21,7 @@ Thumbs.db
 
 # Docker
 .docker/
+dynamic/
 
 # OpenCode
 .omo/
